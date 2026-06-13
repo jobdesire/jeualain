@@ -31,6 +31,16 @@
         .btn-facile { background-color: #10ac84; }
         .btn-normal { background-color: #ff9f43; }
         .btn-difficile { background-color: #ee5253; }
+        
+        /* Bouton Quitter */
+        .btn-quitter {
+            background-color: #747d8c; color: white; border: none;
+            padding: 8px 15px; font-size: 14px; font-weight: bold;
+            border-radius: 15px; cursor: pointer; margin-top: 15px;
+            transition: 0.2s;
+        }
+        .btn-quitter:hover { background-color: #57606f; }
+
         .stats { display: flex; justify-content: space-around; margin-bottom: 20px; font-size: 18px; }
         #game-area {
             position: relative; width: 100%; height: 300px;
@@ -38,8 +48,8 @@
             overflow: hidden; margin-bottom: 20px;
         }
         .falling-char {
-            position: absolute; font-size: 32px; font-weight: bold;
-            color: #10ac84; text-shadow: 0 0 10px #1dd1a1;
+            position: absolute; font-size: 42px; font-weight: bold;
+            color: #1dd1a1; text-shadow: 0 0 15px #1dd1a1;
             width: 100%; text-align: center;
         }
         #mobile-input {
@@ -64,30 +74,43 @@
             <div>Précision: <span id="accuracy" style="color: #feca57; font-weight:bold;">100%</span></div>
         </div>
         <div id="game-area"></div>
-        <input type="text" id="mobile-input" placeholder="Tape la lettre ici !" autocomplete="off" autofocus>
+        <input type="text" id="mobile-input" placeholder="Tape la lettre ici !" autocomplete="off">
+        <br>
+        <button class="btn-quitter" onclick="stopGame()">Quitter le jeu</button>
     </div>
 
     <audio id="success-sound" src="https://actions.google.com/sounds/v1/cartoon/slide_whistle_to_drum_roll.ogg"></audio>
+    <audio id="fail-sound" src="https://actions.google.com/sounds/v1/cartoon/cartoon_wobble.ogg"></audio>
 
     <script>
         let score = 0; let total = 0; let currentChar = ""; let charPosition = 0; let gameInterval; 
-        let fallSpeed = 4; // Cette vitesse va changer selon le bouton cliqué !
+        let fallSpeed = 4;
         const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
         
         const welcomeScreen = document.getElementById('welcome-screen');
         const gameScreen = document.getElementById('game-screen');
         const gameArea = document.getElementById('game-area');
         const mobileInput = document.getElementById('mobile-input');
-        const sound = document.getElementById('success-sound');
+        const soundSuccess = document.getElementById('success-sound');
+        const soundFail = document.getElementById('fail-sound');
 
-        // La fonction reçoit maintenant la vitesse choisie (2, 4 ou 8)
         function startGame(vitesseChoisie) {
+            score = 0; total = 0; // Réinitialise les scores
+            updateStats();
             fallSpeed = vitesseChoisie; 
             welcomeScreen.style.display = 'none';
             gameScreen.style.display = 'block';
+            mobileInput.value = "";
             mobileInput.focus();
             spawnChar();
             gameInterval = setInterval(updateGame, 50);
+        }
+
+        // Fonction pour ARRÊTER le jeu et revenir au menu
+        function stopGame() {
+            clearInterval(gameInterval); // Arrête le chronomètre du jeu
+            gameScreen.style.display = 'none';
+            welcomeScreen.style.display = 'block';
         }
 
         function spawnChar() {
@@ -101,17 +124,26 @@
             charPosition += fallSpeed;
             const letterElem = document.getElementById('letter');
             if (letterElem) { letterElem.style.top = charPosition + 'px'; }
-            if (charPosition > 260) { spawnChar(); updateStats(); }
+            
+            // ÉCHEC : Si la lettre touche le bas (l'enfant a raté)
+            if (charPosition > 250) { 
+                soundFail.currentTime = 0;
+                soundFail.play(); // Joue le son d'échec !
+                spawnChar(); 
+                updateStats(); 
+            }
         }
 
         mobileInput.addEventListener('input', (e) => {
             const typed = e.target.value.toUpperCase();
             if (typed.length > 0) {
                 const lastChar = typed.charAt(typed.length - 1);
+                
+                // RÉUSSITE : Si la lettre saisie est correcte
                 if (lastChar === currentChar) {
                     score++;
-                    sound.currentTime = 0;
-                    sound.play();
+                    soundSuccess.currentTime = 0;
+                    soundSuccess.play(); // Joue le son de réussite !
                     spawnChar();
                 }
                 updateStats();
