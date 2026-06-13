@@ -13,7 +13,7 @@
             align-items: center; justify-content: center;
             min-height: 100vh; overflow: hidden;
         }
-        #welcome-screen, #game-screen {
+        #welcome-screen, #game-screen, #game-over-screen {
             text-align: center; background: rgba(255, 255, 255, 0.1);
             padding: 30px; border-radius: 15px;
             box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
@@ -53,13 +53,14 @@
             width: 80%; padding: 12px; font-size: 18px;
             border-radius: 10px; border: none; text-align: center;
         }
+        .timer-highlight { color: #ff4757; font-weight: bold; font-size: 20px; }
     </style>
 </head>
 <body>
 
     <div id="welcome-screen">
         <h1>🐬 JEU ALAIN TYPING 🐬</h1>
-        <p style="font-size: 18px; margin-bottom: 25px;">Bienvenue ! Choisis ta difficulté pour commencer :</p>
+        <p style="font-size: 18px; margin-bottom: 25px;">Attrape le plus de lettres en 60 secondes !</p>
         <button class="menu-btn btn-facile" onclick="startGame(2)">1) Mode Facile</button>
         <button class="menu-btn btn-normal" onclick="startGame(4)">2) Mode Normal</button>
         <button class="menu-btn btn-difficile" onclick="startGame(8)">3) Mode Difficile</button>
@@ -68,6 +69,7 @@
     <div id="game-screen" style="display: none;">
         <div class="stats">
             <div>Score: <span id="score" style="color: #1dd1a1; font-weight:bold;">0</span></div>
+            <div>Temps: <span id="timer" class="timer-highlight">60s</span></div>
             <div>Précision: <span id="accuracy" style="color: #feca57; font-weight:bold;">100%</span></div>
         </div>
         <div id="game-area"></div>
@@ -76,63 +78,112 @@
         <button class="btn-quitter" onclick="stopGame()">Quitter le jeu</button>
     </div>
 
-    <audio id="success-sound" src="data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAgADgAMgA4AA=="></audio>
-    <audio id="fail-sound" src="data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAEAPv///8IAPA="></audio>
+    <div id="game-over-screen" style="display: none;">
+        <h1>⏰ TEMPS ÉCOULÉ ! ⏰</h1>
+        <p style="font-size: 22px; margin: 20px 0;">Score Final : <span id="final-score" style="color: #1dd1a1; font-weight:bold; font-size:30px;">0</span></p>
+        <p style="font-size: 18px;">Précision : <span id="final-accuracy" style="color: #feca57; font-weight:bold;">100%</span></p>
+        <button class="menu-btn btn-facile" onclick="showWelcomeScreen()" style="width:auto;">Rejouer 🔄</button>
+    </div>
 
     <script>
-        let score = 0; let total = 0; let currentChar = ""; let charPosition = 0; let gameInterval; let fallSpeed = 4;
+        let score = 0; let total = 0; let currentChar = ""; let charPosition = 0; 
+        let gameInterval; let timerInterval;
+        let fallSpeed = 4;
+        let timeLeft = 60; // Durée du jeu fixée à 60 secondes
+        
         const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
         
         const welcomeScreen = document.getElementById('welcome-screen');
         const gameScreen = document.getElementById('game-screen');
+        const gameOverScreen = document.getElementById('game-over-screen');
         const gameArea = document.getElementById('game-area');
         const mobileInput = document.getElementById('mobile-input');
 
-        // Création d'un synthétiseur audio de secours intégré pour garantir le son sur mobile
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
         function playBeep(type) {
             try {
                 let osc = audioCtx.createOscillator();
                 let gain = audioCtx.createGain();
-                osc.connect(gain);
-                gain.connect(audioCtx.destination);
+                osc.connect(gain); gain.connect(audioCtx.destination);
                 
                 if (type === 'success') {
-                    osc.frequency.setValueAtTime(587.33, audioCtx.currentTime); // Note Ré (aiguë)
+                    osc.frequency.setValueAtTime(587.33, audioCtx.currentTime);
                     gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
-                    osc.start();
-                    osc.stop(audioCtx.currentTime + 0.1);
-                } else {
-                    osc.frequency.setValueAtTime(146.83, audioCtx.currentTime); // Note Ré (grave)
+                    osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+                } else if (type === 'erreur') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(220.00, audioCtx.currentTime);
+                    gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+                    osc.start(); osc.stop(audioCtx.currentTime + 0.08);
+                } else if (type === 'gameover') {
+                    // Son spécial de fin de partie (descendant)
+                    osc.frequency.setValueAtTime(300, audioCtx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.4);
                     gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
-                    osc.start();
-                    osc.stop(audioCtx.currentTime + 0.2);
+                    osc.start(); osc.stop(audioCtx.currentTime + 0.4);
+                } else {
+                    osc.frequency.setValueAtTime(146.83, audioCtx.currentTime);
+                    gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                    osc.start(); osc.stop(audioCtx.currentTime + 0.2);
                 }
-            } catch(e) {
-                // Secours si l'AudioContext est bloqué
-                if(type === 'success') document.getElementById('success-sound').play();
-                else document.getElementById('fail-sound').play();
-            }
+            } catch(e) {}
         }
 
         function startGame(vitesseChoisie) {
             if (audioCtx.state === 'suspended') { audioCtx.resume(); }
-            score = 0; total = 0;
+            score = 0; total = 0; timeLeft = 60; // Initialise le temps à 60
             updateStats();
+            document.getElementById('timer').innerText = timeLeft + "s";
+            
             fallSpeed = vitesseChoisie; 
             welcomeScreen.style.display = 'none';
+            gameOverScreen.style.display = 'none';
             gameScreen.style.display = 'block';
+            
             mobileInput.value = "";
             setTimeout(() => { mobileInput.focus(); }, 100);
             spawnChar();
+            
             if(gameInterval) clearInterval(gameInterval);
+            if(timerInterval) clearInterval(timerInterval);
+            
             gameInterval = setInterval(updateGame, 50);
+            timerInterval = setInterval(updateTimer, 1000); // Décompte toutes les secondes
+        }
+
+        function updateTimer() {
+            timeLeft--;
+            document.getElementById('timer').innerText = timeLeft + "s";
+            
+            if (timeLeft <= 0) {
+                endGame();
+            }
         }
 
         function stopGame() {
             clearInterval(gameInterval);
+            clearInterval(timerInterval);
             gameScreen.style.display = 'none';
+            welcomeScreen.style.display = 'block';
+        }
+
+        function endGame() {
+            clearInterval(gameInterval);
+            clearInterval(timerInterval);
+            playBeep('gameover');
+            
+            // Met à jour les scores de l'écran de fin
+            document.getElementById('final-score').innerText = score;
+            const accuracy = total > 1 ? Math.round((score / (total - 1)) * 100) : 100;
+            document.getElementById('final-accuracy').innerText = accuracy + "%";
+            
+            gameScreen.style.display = 'none';
+            gameOverScreen.style.display = 'block';
+        }
+
+        function showWelcomeScreen() {
+            gameOverScreen.style.display = 'none';
             welcomeScreen.style.display = 'block';
         }
 
@@ -163,6 +214,8 @@
                     score++;
                     playBeep('success');
                     spawnChar();
+                } else {
+                    playBeep('erreur');
                 }
                 updateStats();
                 mobileInput.value = "";
