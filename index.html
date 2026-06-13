@@ -31,8 +31,6 @@
         .btn-facile { background-color: #10ac84; }
         .btn-normal { background-color: #ff9f43; }
         .btn-difficile { background-color: #ee5253; }
-        
-        /* Bouton Quitter */
         .btn-quitter {
             background-color: #747d8c; color: white; border: none;
             padding: 8px 15px; font-size: 14px; font-weight: bold;
@@ -40,7 +38,6 @@
             transition: 0.2s;
         }
         .btn-quitter:hover { background-color: #57606f; }
-
         .stats { display: flex; justify-content: space-around; margin-bottom: 20px; font-size: 18px; }
         #game-area {
             position: relative; width: 100%; height: 300px;
@@ -79,36 +76,62 @@
         <button class="btn-quitter" onclick="stopGame()">Quitter le jeu</button>
     </div>
 
-    <audio id="success-sound" src="https://actions.google.com/sounds/v1/cartoon/slide_whistle_to_drum_roll.ogg"></audio>
-    <audio id="fail-sound" src="https://actions.google.com/sounds/v1/cartoon/cartoon_wobble.ogg"></audio>
+    <audio id="success-sound" src="data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAgADgAMgA4AA=="></audio>
+    <audio id="fail-sound" src="data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAEAPv///8IAPA="></audio>
 
     <script>
-        let score = 0; let total = 0; let currentChar = ""; let charPosition = 0; let gameInterval; 
-        let fallSpeed = 4;
+        let score = 0; let total = 0; let currentChar = ""; let charPosition = 0; let gameInterval; let fallSpeed = 4;
         const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
         
         const welcomeScreen = document.getElementById('welcome-screen');
         const gameScreen = document.getElementById('game-screen');
         const gameArea = document.getElementById('game-area');
         const mobileInput = document.getElementById('mobile-input');
-        const soundSuccess = document.getElementById('success-sound');
-        const soundFail = document.getElementById('fail-sound');
+
+        // Création d'un synthétiseur audio de secours intégré pour garantir le son sur mobile
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        function playBeep(type) {
+            try {
+                let osc = audioCtx.createOscillator();
+                let gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                
+                if (type === 'success') {
+                    osc.frequency.setValueAtTime(587.33, audioCtx.currentTime); // Note Ré (aiguë)
+                    gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                    osc.start();
+                    osc.stop(audioCtx.currentTime + 0.1);
+                } else {
+                    osc.frequency.setValueAtTime(146.83, audioCtx.currentTime); // Note Ré (grave)
+                    gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                    osc.start();
+                    osc.stop(audioCtx.currentTime + 0.2);
+                }
+            } catch(e) {
+                // Secours si l'AudioContext est bloqué
+                if(type === 'success') document.getElementById('success-sound').play();
+                else document.getElementById('fail-sound').play();
+            }
+        }
 
         function startGame(vitesseChoisie) {
-            score = 0; total = 0; // Réinitialise les scores
+            if (audioCtx.state === 'suspended') { audioCtx.resume(); }
+            score = 0; total = 0;
             updateStats();
             fallSpeed = vitesseChoisie; 
             welcomeScreen.style.display = 'none';
             gameScreen.style.display = 'block';
             mobileInput.value = "";
-            mobileInput.focus();
+            setTimeout(() => { mobileInput.focus(); }, 100);
             spawnChar();
+            if(gameInterval) clearInterval(gameInterval);
             gameInterval = setInterval(updateGame, 50);
         }
 
-        // Fonction pour ARRÊTER le jeu et revenir au menu
         function stopGame() {
-            clearInterval(gameInterval); // Arrête le chronomètre du jeu
+            clearInterval(gameInterval);
             gameScreen.style.display = 'none';
             welcomeScreen.style.display = 'block';
         }
@@ -125,10 +148,8 @@
             const letterElem = document.getElementById('letter');
             if (letterElem) { letterElem.style.top = charPosition + 'px'; }
             
-            // ÉCHEC : Si la lettre touche le bas (l'enfant a raté)
             if (charPosition > 250) { 
-                soundFail.currentTime = 0;
-                soundFail.play(); // Joue le son d'échec !
+                playBeep('fail');
                 spawnChar(); 
                 updateStats(); 
             }
@@ -138,12 +159,9 @@
             const typed = e.target.value.toUpperCase();
             if (typed.length > 0) {
                 const lastChar = typed.charAt(typed.length - 1);
-                
-                // RÉUSSITE : Si la lettre saisie est correcte
                 if (lastChar === currentChar) {
                     score++;
-                    soundSuccess.currentTime = 0;
-                    soundSuccess.play(); // Joue le son de réussite !
+                    playBeep('success');
                     spawnChar();
                 }
                 updateStats();
